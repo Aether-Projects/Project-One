@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Aether: Meshtastic Blackout Strategy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f5f5f4; color: #1c1917; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 600px; 
+            margin-left: auto; 
+            margin-right: auto; 
+            height: 300px; 
+            max-height: 400px; 
+        } 
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        
+        /* Custom scrollbar for data tables */
+        .scroller::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scroller::-webkit-scrollbar-track { background: #e7e5e4; }
+        .scroller::-webkit-scrollbar-thumb { background: #a8a29e; border-radius: 3px; }
+        
+        .card { @apply bg-white rounded-lg shadow-sm border border-stone-200 p-6 transition-all duration-300; }
+        .card:hover { @apply shadow-md border-orange-200; }
+        
+        .btn-primary { @apply bg-stone-800 text-white px-4 py-2 rounded hover:bg-stone-700 transition-colors font-semibold; }
+        .btn-secondary { @apply bg-stone-200 text-stone-800 px-4 py-2 rounded hover:bg-stone-300 transition-colors font-semibold; }
+        
+        .nav-item { @apply cursor-pointer px-4 py-2 rounded-md transition-colors text-stone-600 hover:text-stone-900 hover:bg-stone-100; }
+        .nav-item.active { @apply bg-orange-100 text-orange-800 font-bold; }
+
+        /* Canvas Animation Container */
+        #meshCanvas { background-color: #fafaf9; border-radius: 0.5rem; width: 100%; height: 100%; }
+    </style>
+    <!-- Chosen Palette: Warm Neutrals (Stone/Orange). Stone-50 to Stone-900 for structure, Orange-500/600 for highlights/alerts. 
+         This reflects a "Field Manual" or "Emergency Guide" aesthetic that is serious but calm. -->
+    
+    <!-- Application Structure Plan:
+         1. Header/Nav: Sticky top for quick access to sections.
+         2. Executive Summary: The "Why" - disaster context.
+         3. Tech Specs (Dashboard): Interactive Range & Power calculations.
+         4. Comparative Analysis: Chart.js visualization of Meshtastic vs. Alternatives.
+         5. Mesh Simulator: Custom Canvas drawing to explain the "hopping" concept visually.
+         6. Implementation Guide: Checklist for deployment.
+         
+         Rational: Users need to first understand the problem (blackout), then see the math (range/power), then compare options, and finally understand HOW it works (topology).
+    -->
+
+    <!-- Visualization & Content Choices:
+         1. Comparison Radar Chart: To show strengths/weaknesses across multiple axes (Cost, Range, Ease of Use, Battery). Library: Chart.js.
+         2. Power Consumption Bar Chart: To contrast days of battery life between technologies. Library: Chart.js.
+         3. Range Calculator: Custom JS logic updating DOM elements based on input sliders. No library.
+         4. Mesh Topology: HTML5 Canvas custom animation. Shows nodes connecting. Goal: Explain "Mesh" without words.
+         
+         CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+    -->
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-stone-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-orange-600 rounded flex items-center justify-center text-white font-bold text-xl">A</div>
+                    <span class="font-bold text-xl tracking-tight text-stone-800">Project Aether</span>
+                </div>
+                <div class="hidden md:flex space-x-4">
+                    <button onclick="navTo('summary')" class="nav-item active" id="nav-summary">Briefing</button>
+                    <button onclick="navTo('comparison')" class="nav-item" id="nav-comparison">Alternatives</button>
+                    <button onclick="navTo('simulation')" class="nav-item" id="nav-simulation">Mesh Logic</button>
+                    <button onclick="navTo('planning')" class="nav-item" id="nav-planning">Deployment</button>
+                </div>
+                <!-- Mobile menu button omitted for brevity, keeping layout simple -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-12">
+
+        <!-- Section 1: Executive Summary -->
+        <section id="summary" class="scroll-mt-24">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-6">
+                    <h1 class="text-4xl font-bold text-stone-900 leading-tight">Communication Continuity <br><span class="text-orange-600">During National Grid Failure</span></h1>
+                    <p class="text-lg text-stone-600 leading-relaxed">
+                        In the event of a catastrophic natural disaster causing a multi-day national blackout, traditional communication infrastructure (Cellular, Internet, Landline) will fail within 4-24 hours as tower backup batteries deplete. 
+                        This report analyzes the viability of <strong>Meshtastic (LoRa)</strong> networks as a decentralized, community-driven emergency response layer.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r">
+                            <h3 class="font-bold text-orange-900">The Core Problem</h3>
+                            <p class="text-sm text-orange-800 mt-1">Centralized networks have single points of failure. When the grid drops, the "backbone" severs.</p>
+                        </div>
+                        <div class="bg-stone-100 border-l-4 border-stone-500 p-4 rounded-r">
+                            <h3 class="font-bold text-stone-900">The Mesh Solution</h3>
+                            <p class="text-sm text-stone-700 mt-1">Decentralized nodes relay messages for each other. No central server. Ultra-low power consumption.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card bg-stone-900 text-white border-stone-700">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Status Report
+                    </h2>
+                    <div class="space-y-4 text-sm mono">
+                        <div class="flex justify-between border-b border-stone-700 pb-2">
+                            <span class="text-stone-400">Target Technology</span>
+                            <span>Meshtastic (LoRa)</span>
+                        </div>
+                        <div class="flex justify-between border-b border-stone-700 pb-2">
+                            <span class="text-stone-400">Frequency Bands</span>
+                            <span>433/868/915 MHz</span>
+                        </div>
+                        <div class="flex justify-between border-b border-stone-700 pb-2">
+                            <span class="text-stone-400">Cost per Node</span>
+                            <span>$35 - $60 USD</span>
+                        </div>
+                        <div class="flex justify-between border-b border-stone-700 pb-2">
+                            <span class="text-stone-400">Battery Runtime</span>
+                            <span>3-7 Days (Typ.)</span>
+                        </div>
+                         <div class="flex justify-between">
+                            <span class="text-stone-400">Primary Limitation</span>
+                            <span class="text-orange-400">Low Bandwidth (Text)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Comparative Analysis -->
+        <section id="comparison" class="scroll-mt-24">
+             <div class="mb-6">
+                <h2 class="text-3xl font-bold text-stone-900">Comparative Technology Analysis</h2>
+                <p class="text-stone-600 max-w-3xl mt-2">
+                    Why choose Meshtastic over Ham Radio or Satellite? The following data visualizes the trade-offs between accessibility, range, power dependence, and cost. While Satellite offers the best connectivity, its reliance on power and subscription costs makes it fragile for mass adoption.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Radar Chart -->
+                <div class="card">
+                    <h3 class="font-bold text-lg mb-4 text-center">Resilience Radar</h3>
+                    <div class="chart-container">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                    <p class="text-xs text-center text-stone-500 mt-4 italic">Higher score is better (1-10)</p>
+                </div>
+
+                <!-- Power Analysis Bar Chart -->
+                <div class="card flex flex-col">
+                    <h3 class="font-bold text-lg mb-4 text-center">Energy Independence (Runtime on 3000mAh)</h3>
+                    <div class="chart-container flex-grow">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                    <div class="mt-4 p-3 bg-stone-50 rounded text-sm text-stone-600">
+                        <strong>Insight:</strong> A Meshtastic node on a standard 18650 battery (3000mAh) can theoretically run for nearly a week. A smartphone searching for signal dies in hours.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Table -->
+            <div class="card mt-8 overflow-hidden">
+                <div class="overflow-x-auto scroller">
+                    <table class="min-w-full text-sm text-left">
+                        <thead class="bg-stone-100 text-stone-800 font-bold uppercase text-xs">
+                            <tr>
+                                <th class="px-6 py-3">System</th>
+                                <th class="px-6 py-3">Range (Urban/Rural)</th>
+                                <th class="px-6 py-3">Infrastructure Needed</th>
+                                <th class="px-6 py-3">Skill Level</th>
+                                <th class="px-6 py-3">Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-stone-200">
+                            <tr>
+                                <td class="px-6 py-4 font-medium text-orange-700">Meshtastic (LoRa)</td>
+                                <td class="px-6 py-4">1-4km / 20km+</td>
+                                <td class="px-6 py-4">None (Peer-to-Peer)</td>
+                                <td class="px-6 py-4">Medium (Setup once)</td>
+                                <td class="px-6 py-4">Low ($40)</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-medium">Ham Radio (VHF/UHF)</td>
+                                <td class="px-6 py-4">2-10km / 50km+</td>
+                                <td class="px-6 py-4">None (Direct) or Repeaters</td>
+                                <td class="px-6 py-4">High (Licensing)</td>
+                                <td class="px-6 py-4">Med ($100+)</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-medium">Satellite (Iridium)</td>
+                                <td class="px-6 py-4">Global</td>
+                                <td class="px-6 py-4">Satellites (External)</td>
+                                <td class="px-6 py-4">Low</td>
+                                <td class="px-6 py-4">Very High ($400+)</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-medium">GMRS/FRS Walkie</td>
+                                <td class="px-6 py-4">0.5km / 3km</td>
+                                <td class="px-6 py-4">None</td>
+                                <td class="px-6 py-4">Very Low</td>
+                                <td class="px-6 py-4">Low ($30)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Mesh Logic Simulator -->
+        <section id="simulation" class="scroll-mt-24">
+            <div class="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
+                <div>
+                    <h2 class="text-3xl font-bold text-stone-900">Understanding Mesh Topology</h2>
+                    <p class="text-stone-600 mt-2 max-w-2xl">
+                        In a blackout, A cannot see C. But A can see B, and B can see C. <br>
+                        The message "hops" automatically: A &rarr; B &rarr; C.
+                        <br><strong>Interact:</strong> Click the canvas to add a new "Relay Node" to bridge gaps.
+                    </p>
+                </div>
+                <div class="flex gap-2">
+                     <div class="px-3 py-1 rounded bg-stone-200 text-xs font-bold text-stone-600">You (Source)</div>
+                     <div class="px-3 py-1 rounded bg-orange-200 text-xs font-bold text-orange-800">Target</div>
+                     <div class="px-3 py-1 rounded bg-blue-100 text-xs font-bold text-blue-800">Relay</div>
+                </div>
+            </div>
+
+            <div class="card p-4 h-[500px] flex flex-col relative">
+                <canvas id="meshCanvas"></canvas>
+                <div class="absolute bottom-6 right-6 bg-white/90 p-3 rounded shadow border border-stone-200 text-xs">
+                    <p><strong>Nodes:</strong> <span id="nodeCount">0</span></p>
+                    <p><strong>Status:</strong> <span id="meshStatus" class="font-bold text-red-500">Disconnected</span></p>
+                    <button onclick="resetMesh()" class="mt-2 text-blue-600 hover:underline">Reset Simulation</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Deployment Planning Tool -->
+        <section id="planning" class="scroll-mt-24 pb-12">
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-stone-900">Deployment Calculator</h2>
+                <p class="text-stone-600 max-w-3xl mt-2">
+                    Estimate the capability of your node based on terrain and hardware choices.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Inputs -->
+                <div class="card space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">Environment Density</label>
+                        <select id="envInput" class="w-full bg-stone-50 border border-stone-300 rounded p-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none" onchange="updateEstimates()">
+                            <option value="0.5">Dense Urban (Concrete Canyons)</option>
+                            <option value="1.0" selected>Suburban (Houses/Trees)</option>
+                            <option value="3.0">Rural (Open Fields)</option>
+                            <option value="5.0">Mountain Top (Line of Sight)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">Antenna Quality</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="ant" value="0.8" onchange="updateEstimates()" class="text-orange-600 focus:ring-orange-500">
+                                <span class="text-sm">Stock (Stubby)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="ant" value="1.2" checked onchange="updateEstimates()" class="text-orange-600 focus:ring-orange-500">
+                                <span class="text-sm">Upgrade (Tuned Dipole)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="ant" value="2.0" onchange="updateEstimates()" class="text-orange-600 focus:ring-orange-500">
+                                <span class="text-sm">Base Station (Large Fiberglass)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">Elevation (Height above avg terrain)</label>
+                        <input type="range" id="heightInput" min="1" max="50" value="2" class="w-full accent-orange-600" oninput="updateHeightDisplay()">
+                        <div class="flex justify-between text-xs text-stone-500 mt-1">
+                            <span>1m (Handheld)</span>
+                            <span id="heightDisplay" class="font-bold text-stone-900">2m</span>
+                            <span>50m (Tower)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Output -->
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-stone-800 text-white rounded-lg p-6 flex flex-col justify-center items-center text-center shadow-lg">
+                        <div class="text-stone-400 text-sm uppercase tracking-wider mb-2">Estimated Range</div>
+                        <div class="text-5xl font-bold font-mono text-orange-400"><span id="rangeOutput">0</span> km</div>
+                        <div class="text-xs text-stone-500 mt-2">Max reliable distance</div>
+                    </div>
+
+                    <div class="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between shadow-sm">
+                        <div>
+                            <div class="text-stone-500 text-sm uppercase tracking-wider mb-2">Mesh Hop Potential</div>
+                            <p class="text-sm text-stone-600">
+                                With this setup, you need approximately <strong id="hopsOutput" class="text-orange-600">X</strong> nodes to cover a 20km city radius.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-stone-100">
+                             <div class="text-stone-500 text-sm uppercase tracking-wider mb-2">Recommendation</div>
+                             <p id="recOutput" class="font-bold text-stone-800">Calculating...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-stone-900 text-stone-400 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-sm">Research & Development: Project Aether. Data simulated for educational purposes.</p>
+        </div>
+    </footer>
+
+    <!-- LOGIC SCRIPT -->
+    <script>
+        // --- 1. Navigation Logic ---
+        function navTo(id) {
+            const el = document.getElementById(id);
+            if(el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+                // Update active state
+                document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('nav-' + id).classList.add('active');
+            }
+        }
+
+        // --- 2. Data & Charts ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initRadarChart();
+            initBarChart();
+            updateEstimates(); // Init calculator
+            initMeshSimulation(); // Start Canvas
+        });
+
+        // Chart 1: Radar Comparison
+        function initRadarChart() {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Range', 'Battery Efficiency', 'Cost (Low is Good)', 'Ease of Use', 'Off-Grid Ability', 'Privacy'],
+                    datasets: [{
+                        label: 'Meshtastic',
+                        data: [4, 9, 9, 6, 10, 8],
+                        backgroundColor: 'rgba(234, 88, 12, 0.2)',
+                        borderColor: 'rgba(234, 88, 12, 1)',
+                        pointBackgroundColor: 'rgba(234, 88, 12, 1)',
+                    },
+                    {
+                        label: 'Ham Radio',
+                        data: [8, 5, 4, 3, 10, 4],
+                        backgroundColor: 'rgba(120, 113, 108, 0.2)',
+                        borderColor: 'rgba(120, 113, 108, 1)',
+                        pointBackgroundColor: 'rgba(120, 113, 108, 1)',
+                    },
+                    {
+                        label: 'Cellular (Backup)',
+                        data: [6, 2, 6, 9, 1, 3], // Fails in blackout (Off-grid = 1)
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                         pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: '#e7e5e4' },
+                            grid: { color: '#e7e5e4' },
+                            suggestedMin: 0,
+                            suggestedMax: 10,
+                            ticks: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // Chart 2: Battery Life
+        function initBarChart() {
+            const ctx = document.getElementById('barChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Smartphone (Searching)', 'GMRS Walkie', 'Ham Handheld', 'Meshtastic (ESP32)', 'Meshtastic (nRF52)'],
+                    datasets: [{
+                        label: 'Hours of Runtime (3000mAh)',
+                        data: [6, 12, 18, 48, 168], // nRF52 is extremely efficient
+                        backgroundColor: [
+                            '#ef4444', // Red
+                            '#f97316', 
+                            '#f59e0b',
+                            '#84cc16',
+                            '#22c55e' // Green
+                        ],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.x + ' Hours (' + (context.parsed.x/24).toFixed(1) + ' Days)';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- 3. Calculator Logic ---
+        function updateHeightDisplay() {
+            const val = document.getElementById('heightInput').value;
+            document.getElementById('heightDisplay').innerText = val + "m";
+            updateEstimates();
+        }
+
+        function updateEstimates() {
+            const envFactor = parseFloat(document.getElementById('envInput').value);
+            const antennaFactor = parseFloat(document.querySelector('input[name="ant"]:checked').value);
+            const height = parseInt(document.getElementById('heightInput').value);
+            
+            // Simplified propagation model logic for estimation
+            // Base ranges: Urban 1km, Rural 10km. Modified by height and antenna gain.
+            // Formula: Base * Env * Antenna * log2(Height)
+            
+            let baseKm = 1.5; 
+            // Height multiplier (diminishing returns)
+            let heightMult = Math.log(height + 1) * 0.8; 
+            if (heightMult < 1) heightMult = 1;
+
+            let totalKm = (baseKm * envFactor * antennaFactor * heightMult).toFixed(1);
+
+            // Cap at sensible physics limits for LoRa without massive towers
+            if(totalKm > 80) totalKm = 80;
+
+            document.getElementById('rangeOutput').innerText = totalKm;
+
+            // Coverage calculation (Circle Area) vs Target Area (City ~ 1200 sq km)
+            const range = parseFloat(totalKm);
+            const coverArea = Math.PI * range * range;
+            const targetCityArea = 1200; // arbitrary large city
+            const nodesNeeded = Math.ceil(targetCityArea / coverArea);
+            
+            let displayNodes = nodesNeeded;
+            if(displayNodes < 2) displayNodes = 2; // Min 2 for a mesh
+
+            let hopsText = `~${displayNodes} distributed nodes`;
+            if (envFactor === 5.0) hopsText = "1 node (Line of Sight covers all)";
+
+            document.getElementById('hopsOutput').innerText = hopsText;
+
+            // Recommendation Text
+            const recEl = document.getElementById('recOutput');
+            if (range < 2) {
+                recEl.innerText = "Critical: You need to elevate your antenna or place relays on rooftops. Ground level is insufficient.";
+                recEl.className = "text-red-600 font-bold";
+            } else if (range < 10) {
+                recEl.innerText = "Good: Capable of neighborhood coverage. Connect with 2-3 friends to span the district.";
+                recEl.className = "text-orange-600 font-bold";
+            } else {
+                recEl.innerText = "Excellent: You can act as a primary Relay Hub for the community.";
+                recEl.className = "text-green-600 font-bold";
+            }
+        }
+
+        // --- 4. Mesh Canvas Simulation ---
+        let canvas, ctx, nodes = [];
+        let animationId;
+        const connectionDistance = 150; // pixels
+
+        function initMeshSimulation() {
+            canvas = document.getElementById('meshCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            // Create initial nodes
+            resetMesh();
+
+            // Event listener for adding nodes
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                addNode(x, y, 'relay');
+            });
+
+            animate();
+        }
+
+        class Node {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'source', 'target', 'relay'
+                this.vx = (Math.random() - 0.5) * 0.5; // Slight jitter
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.connected = false;
+            }
+
+            update() {
+                // Jitter movement
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off walls
+                if (this.x < 10 || this.x > canvas.width - 10) this.vx *= -1;
+                if (this.y < 10 || this.y > canvas.height - 10) this.vy *= -1;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 8, 0, Math.PI * 2);
+                if (this.type === 'source') ctx.fillStyle = '#57534e'; // Stone-600
+                else if (this.type === 'target') ctx.fillStyle = '#ea580c'; // Orange-600
+                else ctx.fillStyle = '#3b82f6'; // Blue-500
+                ctx.fill();
+                
+                // Draw label
+                ctx.fillStyle = '#000';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                let label = this.type === 'source' ? 'YOU' : (this.type === 'target' ? 'DEST' : 'R');
+                ctx.fillText(label, this.x, this.y - 12);
+            }
+        }
+
+        function addNode(x, y, type) {
+            nodes.push(new Node(x, y, type));
+            document.getElementById('nodeCount').innerText = nodes.length;
+        }
+
+        function resetMesh() {
+            nodes = [];
+            // Place Source (Left)
+            addNode(50, canvas.height / 2, 'source');
+            // Place Target (Right)
+            addNode(canvas.width - 50, canvas.height / 2, 'target');
+            
+            // Add a few random relays that might NOT connect initially
+            for(let i=0; i<3; i++) {
+                addNode(Math.random() * canvas.width, Math.random() * canvas.height, 'relay');
+            }
+        }
+
+        // BFS to check if path exists from Source to Target
+        function checkConnectivity() {
+            if(nodes.length < 2) return false;
+            
+            // Reset visited
+            let source = nodes[0];
+            let target = nodes[1]; // Assuming index 1 is target based on resetMesh
+            
+            let q = [source];
+            let visited = new Set();
+            visited.add(source);
+            
+            while(q.length > 0) {
+                let current = q.shift();
+                if (current === target) return true;
+                
+                // Find neighbors
+                for (let n of nodes) {
+                    if (!visited.has(n)) {
+                        let dx = current.x - n.x;
+                        let dy = current.y - n.y;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist < connectionDistance) {
+                            visited.add(n);
+                            q.push(n);
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update positions
+            nodes.forEach(node => node.update());
+
+            // Check connectivity
+            const isConnected = checkConnectivity();
+            const statusEl = document.getElementById('meshStatus');
+            if(isConnected) {
+                statusEl.innerText = "Connected";
+                statusEl.className = "font-bold text-green-600";
+            } else {
+                statusEl.innerText = "Broken Chain";
+                statusEl.className = "font-bold text-red-500";
+            }
+
+            // Draw Connections
+            ctx.lineWidth = 2;
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    let dx = nodes[i].x - nodes[j].x;
+                    let dy = nodes[i].y - nodes[j].y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+
+                    if (dist < connectionDistance) {
+                        // Color line based on path status logic (simplified here)
+                        ctx.strokeStyle = 'rgba(200, 200, 200, 0.5)';
+                        if (isConnected) ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)'; // Green glow if fully connected
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(nodes[i].x, nodes[i].y);
+                        ctx.lineTo(nodes[j].x, nodes[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw Nodes
+            nodes.forEach(node => node.draw());
+
+            // Draw Range Circles for visual aid (only for source/target to reduce clutter)
+            ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+            ctx.beginPath();
+            ctx.arc(nodes[0].x, nodes[0].y, connectionDistance, 0, Math.PI*2);
+            ctx.stroke();
+
+            requestAnimationFrame(animate);
+        }
+        
+        // Resize canvas on window resize
+        window.addEventListener('resize', () => {
+             const rect = canvas.parentElement.getBoundingClientRect();
+             canvas.width = rect.width;
+             canvas.height = rect.height;
+        });
+
+    </script>
+</body>
+</html>
